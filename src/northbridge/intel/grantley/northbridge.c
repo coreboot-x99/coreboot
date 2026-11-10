@@ -32,6 +32,9 @@
 /* Stock firmware places the IIO IOAPIC right above the PCH one. */
 #define IIO_IOAPIC_ABAR_STOCK		(IIO_IOAPIC_ABAR_EN | 0x010)
 #define IIO_IOAPIC_GSI_BASE		24
+#define IIO_IOAPIC_PCI_BUS		0
+#define IIO_IOAPIC_PCI_SLOT		5
+#define IIO_IOAPIC_PCI_FUNC		4
 
 /* Top of the low MMIO window, 1 MiB granularity. */
 #define IIO_MMIO_TOP			0xa4
@@ -140,9 +143,24 @@ static unsigned long grantley_fill_dmar(unsigned long current)
 	current += acpi_create_dmar_ds_ioapic_from_hw(current, IO_APIC_ADDR,
 						      PCH_IOAPIC_PCI_BUS,
 						      PCH_IOAPIC_PCI_SLOT, 0);
-	if (iio_ioapic)
-		current += acpi_create_dmar_ds_ioapic_from_hw(current, iio_ioapic,
-							      0, 5, 4);
+	if (iio_ioapic) {
+		/*
+		 * Use the ID announced in the MADT. The OS matches the two
+		 * tables by ID, and the IIO IOAPIC window does not reliably
+		 * decode by the time the ACPI tables are written.
+		 */
+		struct device *ioapic = NULL;
+		u8 id = get_ioapic_id(iio_ioapic);
+
+		while ((ioapic = dev_find_path(ioapic, DEVICE_PATH_IOAPIC))) {
+			if (ioapic->path.ioapic.addr == iio_ioapic)
+				id = ioapic->path.ioapic.ioapic_id;
+		}
+		printk(BIOS_DEBUG, "DMAR: IIO IOAPIC %lx id %u (hw %u)\n",
+		       (unsigned long)iio_ioapic, id, get_ioapic_id(iio_ioapic));
+		current += acpi_create_dmar_ds_ioapic(current, id, IIO_IOAPIC_PCI_BUS,
+						    IIO_IOAPIC_PCI_SLOT, IIO_IOAPIC_PCI_FUNC);
+	}
 	for (size_t i = 0; i < 8; i++)
 		current += acpi_create_dmar_ds_msi_hpet(current, 0, PCH_HPET_PCI_BUS,
 							PCH_HPET_PCI_SLOT, i);
