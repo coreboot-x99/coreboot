@@ -38,10 +38,17 @@ enum grantley_pei_slot {
 /*
  * caller is the module's return address; arg0/arg1 are slot-specific and are
  * printed only where they identify the request (PPI GUID, HOB type, sizes).
+ * Lines carry the time elapsed since grantley_pei_trace_begin().
  */
+void grantley_pei_trace_begin(void);
+
 void grantley_pei_trace(enum grantley_pei_slot slot, uintptr_t caller,
 			unsigned long arg0, unsigned long arg1);
 #else
+static inline void grantley_pei_trace_begin(void)
+{
+}
+
 static inline void grantley_pei_trace(enum grantley_pei_slot slot, uintptr_t caller,
 				      unsigned long arg0, unsigned long arg1)
 {

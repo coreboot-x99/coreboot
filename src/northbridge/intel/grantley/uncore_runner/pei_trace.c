@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <arch/cpuid.h>
 #include <console/console.h>
+#include <cpu/x86/tsc.h>
 #include <stdint.h>
 #include "pei_trace.h"
 
@@ -56,6 +58,36 @@ static const uint16_t slot_budget[GRANTLEY_PEI_SLOT_COUNT] = {
 
 static uint16_t slot_printed[GRANTLEY_PEI_SLOT_COUNT];
 
+static uint64_t trace_base;
+static uint32_t tsc_per_ms;
+
+/*
+ * A wait inside the module that never returns shows up as the absence of a
+ * following line, so each line carries the time since the entry point. The TSC
+ * runs at the CPU's base frequency, which is what CPUID leaf 16h reports; the
+ * fallback is the 2.4 GHz base of the parts this port targets.
+ */
+void grantley_pei_trace_begin(void)
+{
+	uint32_t mhz = 0;
+
+	if (cpuid(0).eax >= 0x16)
+		mhz = cpuid(0x16).eax & 0xffff;
+	if (!mhz)
+		mhz = 2400;
+
+	tsc_per_ms = mhz * 1000;
+	trace_base = tsc_to_uint64(rdtsc());
+}
+
+static uint32_t trace_ms(void)
+{
+	if (!tsc_per_ms)
+		return 0;
+
+	return (uint32_t)((tsc_to_uint64(rdtsc()) - trace_base) / tsc_per_ms);
+}
+
 void grantley_pei_trace(enum grantley_pei_slot slot, uintptr_t caller,
 			unsigned long arg0, unsigned long arg1)
 {
@@ -67,19 +99,20 @@ void grantley_pei_trace(enum grantley_pei_slot slot, uintptr_t caller,
 
 	switch (slot) {
 	case GRANTLEY_PEI_LOCATE_PPI:
-		printk(BIOS_INFO, "PEIM %s from %p: guid %08lx-%08lx\n",
-		       slot_name[slot], (void *)caller, arg0, arg1);
+		printk(BIOS_INFO, "PEIM %s from %p: guid %08lx-%08lx [%u ms]\n",
+		       slot_name[slot], (void *)caller, arg0, arg1, trace_ms());
 		break;
 	case GRANTLEY_PEI_CREATE_HOB:
-		printk(BIOS_INFO, "PEIM %s from %p: type %lu length %lu\n",
-		       slot_name[slot], (void *)caller, arg0, arg1);
+		printk(BIOS_INFO, "PEIM %s from %p: type %lu length %lu [%u ms]\n",
+		       slot_name[slot], (void *)caller, arg0, arg1, trace_ms());
 		break;
 	case GRANTLEY_PEI_INSTALL_PEI_MEMORY:
-		printk(BIOS_INFO, "PEIM %s from %p: begin 0x%lx size 0x%lx\n",
-		       slot_name[slot], (void *)caller, arg0, arg1);
+		printk(BIOS_INFO, "PEIM %s from %p: begin 0x%lx size 0x%lx [%u ms]\n",
+		       slot_name[slot], (void *)caller, arg0, arg1, trace_ms());
 		break;
 	default:
-		printk(BIOS_INFO, "PEIM %s from %p\n", slot_name[slot], (void *)caller);
+		printk(BIOS_INFO, "PEIM %s from %p [%u ms]\n",
+		       slot_name[slot], (void *)caller, trace_ms());
 		break;
 	}
 }

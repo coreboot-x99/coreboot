@@ -12,6 +12,7 @@
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
 #include <northbridge/intel/grantley/uncore_runner/pei_services.h>
+#include <northbridge/intel/grantley/uncore_runner/pei_trace.h>
 #include <post.h>
 #include <romstage_common.h>
 #include <romstage_handoff.h>
@@ -111,12 +112,13 @@ void mainboard_romstage_entry(void)
 		 */
 		const msr_t cpubusno = rdmsr(0x300);		/* CPUBUSNO */
 		const msr_t platform_info = rdmsr(0xce);	/* PLATFORM_INFO */
-		printk(BIOS_INFO, "Grantley: CPUBUSNO %08x:%08x ratio %u\n",
-		       cpubusno.hi, cpubusno.lo,
+		printk(BIOS_INFO, "Grantley: CPUBUSNO lo %08x hi %08x ratio %u\n",
+		       cpubusno.lo, cpubusno.hi,
 		       (unsigned int)((platform_info.lo >> 8) & 0xff));
 
 		post_code(0x35);
 		printk(BIOS_INFO, "Grantley: launching UncoreInitPeim memory training...\n");
+		grantley_pei_trace_begin();
 
 		status = grantley_run_uncore_peim(uncore_bin, uncore_size,
 						  &uncore_state, stack_top);
