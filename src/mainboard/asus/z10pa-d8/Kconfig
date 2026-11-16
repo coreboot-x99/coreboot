@@ -5,10 +5,14 @@ if BOARD_ASUS_Z10PA_D8
 config BOARD_SPECIFIC_OPTIONS
 	def_bool y
 	select BOARD_ROMSIZE_KB_16384
+	select DRIVERS_ASPEED_AST_COMMON
+	select DRIVERS_ASPEED_AST2050
 	select HAVE_ACPI_TABLES
 	select NORTHBRIDGE_INTEL_GRANTLEY
 	select SERIRQ_CONTINUOUS_MODE
 	select SOUTHBRIDGE_INTEL_LYNXPOINT
+	select SUPERIO_ASPEED_AST2400
+	select SUPERIO_ASPEED_COMMON_PRE_RAM
 	select SUPERIO_NUVOTON_COMMON_COM_A
 	select SUPERIO_NUVOTON_COMMON_PRE_RAM
 	select SUPERIO_NUVOTON_NCT6779D
@@ -23,10 +27,12 @@ config BOOTBLOCK_CONSOLE
 	default y
 
 config GRANTLEY_INTELSETUP_SERIAL_LEVEL_OFFSET
-	default 0x2ee
+	#default 0x2ee
+	default 0x2d6 # Using Machinist Uncore for now
 
 # The 6211-byte payload is not the 6090-byte one the other X99 ports use, so
 # attemptFastBootCold has not been located in it yet; leave the byte alone.
+# This is a server board, so it does not really need fast boot anyway.
 config GRANTLEY_INTELSETUP_FAST_BOOT_COLD_OFFSET
 	default 0x0
 
