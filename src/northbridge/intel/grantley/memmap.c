@@ -6,7 +6,6 @@
 #include <console/console.h>
 #include <cpu/x86/mtrr.h>
 #include <cpu/x86/smm.h>
-#include <rules.h>
 #include "memmap.h"
 
 /* Private, versioned cross-stage handoff; never retain CAR/HOB pointers. */
