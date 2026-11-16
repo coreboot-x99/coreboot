@@ -141,20 +141,12 @@ static void pm_post_phase3(u8 bus)
 	if (id != ((0x2f9aU << 16) | PCI_VID_INTEL) &&
 	    id != ((0x6f9aU << 16) | PCI_VID_INTEL))
 		die("Grantley: PCU function 2 is inaccessible\n");
-	/*
-	 * Clear the PCU MCA source status only after ACK3: doing it any earlier
-	 * drives the package into a shutdown loop. Log the source before clearing
-	 * it and leave the MCI banks alone.
-	 */
+	/* Diagnostic only: observe the PCU source status without clearing it. */
 	value = pci_s_read_config32(pcu2, PCU_MCA_ERR_SRC_LOG);
 	if (value == UINT32_MAX)
 		die("Grantley: PCU MCA source status is inaccessible\n");
 	if (value)
-		printk(BIOS_WARNING, "Grantley: pre-clear PCU MCA_ERR_SRC_LOG=%08x\n", value);
-	pci_s_write_config32(pcu2, PCU_MCA_ERR_SRC_LOG, 0);
-	value = pci_s_read_config32(pcu2, PCU_MCA_ERR_SRC_LOG);
-	if (value)
-		printk(BIOS_WARNING, "Grantley: PCU MCA_ERR_SRC_LOG remains %08x\n", value);
+		printk(BIOS_WARNING, "Grantley: preserved PCU MCA_ERR_SRC_LOG=%08x\n", value);
 }
 
 static void grantley_bios_init_completion(void *unused)
