@@ -12,6 +12,8 @@
 
 #include <cpu/intel/car/cache_as_ram_symbols.inc>
 
+#include "early_startup.inc"
+
 .code32
 _cache_as_ram_setup:
 
@@ -20,72 +22,7 @@ bootblock_pre_c_entry:
 	jmp	check_mtrr /* Check if CPU properly reset */
 
 cache_as_ram:
-	/* Enable FXSAVE and unmasked SIMD exception support (CR4.OSFXSR |
-	 * OSXMMEXCPT).  The stock SEC enables these before any IO or C code;
-	 * the Uncore PEIM uses XMM registers and would fault without them. */
-	movl	%cr4, %eax
-	orl	$((1 << 9) | (1 << 10)), %eax
-	movl	%eax, %cr4
-
-	/* Program the early SAD I/O and MMIO target lists via CF8/CFC. */
-	/* Set LOCKCONTROL.LockDisable (1:16.5:0x50 bit 0). */
-	movl	$0x80018550, %eax
-	movw	$0xcf8, %dx
-	outl	%eax, %dx
-	movw	$0xcfc, %dx
-	inl	%dx, %eax
-	orl	$1, %eax
-	outl	%eax, %dx
-
-	/* 2. Route IO Target List to Legacy Node (1:15.5:0xe0 = IOPORT_TARGET_LIST).
-	 * Only offsets 0x00-0xff are reachable through CF8/CFC; the 0x7df0/0x7de0/
-	 * 0x7de8 values below are devfn 0x7d (dev 15/fn 5) plus the register
-	 * offset in the low byte, matching the CSR_LEGACY_*_CBO register naming. */
-	movl	$0x80017df0, %eax	/* 1:15.5:0xf0 SAD_TARGET_CBO */
-	movw	$0xcf8, %dx
-	outl	%eax, %dx
-	movw	$0xcfc, %dx
-	inl	%dx, %eax
-	andl	$0x38, %eax		/* keep bits 5:3 */
-	shrl	$3, %eax		/* node id */
-	movl	%eax, %ebx
-	movb	$3, %cl
-	movb	$7, %ch
-1:
-	shll	%cl, %eax
-	orl	%eax, %ebx
-	decb	%ch
-	jnz	1b
-
-	movl	$0x80017de0, %eax	/* 1:15.5:0xe0 IOPORT_TARGET_LIST_CBO */
-	movw	$0xcf8, %dx
-	outl	%eax, %dx
-	movw	$0xcfc, %dx
-	movl	%ebx, %eax
-	outl	%eax, %dx
-
-	movl	$0x80017de8, %eax	/* 1:15.5:0xe8 MMIO_TARGET_LIST_CBO */
-	movw	$0xcf8, %dx
-	outl	%eax, %dx
-	movw	$0xcfc, %dx
-	movl	%ebx, %eax
-	outl	%eax, %dx
-
-	/* Decode 0xfc000000..0xffffffff, including CAR, as MMIO
-	 * (1:15.5:0x58/0x5c = MMIO_RULE_3 base/limit). */
-	movl	$0x80017d5c, %eax
-	movw	$0xcf8, %dx
-	outl	%eax, %dx
-	movw	$0xcfc, %dx
-	xorl	%eax, %eax
-	outl	%eax, %dx
-
-	movl	$0x80017d58, %eax
-	movw	$0xcf8, %dx
-	outl	%eax, %dx
-	movw	$0xcfc, %dx
-	movl	$0xff00007f, %eax
-	outl	%eax, %dx
+	early_uncore_init
 
 	/* Entry16/32 POSTs stay suppressed until legacy routing is installed.
 	 * Restore assembly POSTs here, including the CAR/VCU failure paths.
@@ -98,9 +35,8 @@ cache_as_ram:
 #endif
 	post_code(POSTCODE_BOOTBLOCK_CAR)
 
-#define GRANTLEY_PRE_NEM
-#include "early_startup.inc"
-#undef GRANTLEY_PRE_NEM
+#include "processor_startup_enable_access_csr.inc"
+	enable_access_csr
 
 #if CONFIG(MICROCODE_UPDATE_PRE_RAM)
 	/* Apply the matching update before enabling caches or entering NEM. */
@@ -110,9 +46,9 @@ cache_as_ram:
 end_microcode_update:
 #endif
 
-#define GRANTLEY_CACHE_PREP
-#include "early_startup.inc"
-#undef GRANTLEY_CACHE_PREP
+#include "processor_startup_mid.inc"
+	mid_uncore_init
+	pre_nem_uncore_init
 
 #include <cpu/intel/car/non-evict/mtrr_setup.inc>
 
@@ -184,9 +120,11 @@ end_microcode_update:
 	rep	stosb
 
 	/* Set up the C stack, including padding for the three arguments. */
-#define GRANTLEY_POST_NEM
-#include "early_startup.inc"
-#undef GRANTLEY_POST_NEM
+#include "processor_startup_late.inc"
+	startup_uncore_base
+	processor_workaround
+	txt_init
+	setup_processor_checkin_data
 
 #include <cpu/intel/car/non-evict/c_entry.inc>
 
