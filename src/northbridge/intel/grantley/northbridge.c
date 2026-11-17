@@ -376,11 +376,24 @@ static void grantley_dmi_gen2(void)
 	dmi_print_link_status(BIOS_INFO);
 }
 
+#define DMI_MISCCTRLSTS_0		0x188
+#define  DISABLE_L0S_ON_TRANSMITTER	(1 << 31)
+
+/* The DMI transmitter does not support L0s, whatever Link Control requests. */
+static void grantley_dmi_disable_l0s(void)
+{
+	const pci_devfn_t dmi = PCI_DEV(0, 0, 0);
+
+	pci_s_write_config32(dmi, DMI_MISCCTRLSTS_0,
+			     pci_s_read_config32(dmi, DMI_MISCCTRLSTS_0) | DISABLE_L0S_ON_TRANSMITTER);
+}
+
 static void grantley_init(void *chip_info)
 {
 	const struct northbridge_intel_grantley_config *cfg = chip_info;
 
 	grantley_dmi_gen2();
+	grantley_dmi_disable_l0s();
 
 	/* The uncore initializer leaves VT-d off; IIO late init would enable it. */
 	if (cfg->vtd_support)
