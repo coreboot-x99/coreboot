@@ -201,6 +201,12 @@ static void grantley_vtd_set_coherency(void *unused)
 
 BOOT_STATE_INIT_ENTRY(BS_DEV_INIT, BS_ON_EXIT, grantley_vtd_set_coherency, NULL);
 
+void soc_fill_fadt(acpi_fadt_t *fadt)
+{
+	fadt->flags &= ~ACPI_FADT_APIC_CLUSTER;
+	fadt->flags |= ACPI_FADT_APIC_PHYSICAL;
+}
+
 static unsigned long grantley_write_acpi_tables(const struct device *dev,
 						unsigned long current,
 						struct acpi_rsdp *rsdp)
@@ -210,9 +216,7 @@ static unsigned long grantley_write_acpi_tables(const struct device *dev,
 
 	acpi_dmar_t *const dmar = (acpi_dmar_t *)current;
 	printk(BIOS_DEBUG, "ACPI:    * DMAR\n");
-	/* No Grantley topology needs APIC IDs above 254. */
-	acpi_create_dmar(dmar, DMAR_INTR_REMAP | DMAR_X2APIC_OPT_OUT,
-			 grantley_fill_dmar);
+	acpi_create_dmar(dmar, DMAR_INTR_REMAP, grantley_fill_dmar);
 	current += dmar->header.length;
 	current = acpi_align_current(current);
 	acpi_add_table(rsdp, dmar);
