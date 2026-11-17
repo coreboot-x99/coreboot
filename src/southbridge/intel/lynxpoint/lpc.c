@@ -312,7 +312,11 @@ static void configure_dmi_pm(struct device *dev)
 
 	RCBA32_OR(0x21a4, 3 << 10);
 
-	RCBA16(0x21a8) |= 3 << 0;
+	/* The Grantley CPU DMI port advertises L1 only, so leave L0s off */
+	if (CONFIG(NORTHBRIDGE_INTEL_GRANTLEY))
+		RCBA16_AND_OR(0x21a8, ~(3 << 0), 2 << 0);
+	else
+		RCBA16(0x21a8) |= 3 << 0;
 
 	/* Set again after enabling DMI ASPM */
 	RCBA32_OR(0x2304, 1 << 10);
