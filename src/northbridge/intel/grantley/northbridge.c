@@ -181,7 +181,9 @@ static unsigned long grantley_write_acpi_tables(const struct device *dev,
 
 	acpi_dmar_t *const dmar = (acpi_dmar_t *)current;
 	printk(BIOS_DEBUG, "ACPI:    * DMAR\n");
-	acpi_create_dmar(dmar, DMAR_INTR_REMAP, grantley_fill_dmar);
+	/* No Grantley topology needs APIC IDs above 254. */
+	acpi_create_dmar(dmar, DMAR_INTR_REMAP | DMAR_X2APIC_OPT_OUT,
+			 grantley_fill_dmar);
 	current += dmar->header.length;
 	current = acpi_align_current(current);
 	acpi_add_table(rsdp, dmar);
