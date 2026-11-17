@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <assert.h>
+#include <bootstate.h>
 #include <commonlib/helpers.h>
 #include <console/console.h>
 #include <device/device.h>
@@ -28,6 +29,8 @@
 #define GRANTLEY_VTD_BASE		0xfbffc000
 #define IIO_VTBAR			0x180
 #define  IIO_VTBAR_EN			(1 << 0)
+#define VTD_ECAP			0x10
+#define  VTD_ECAP_C			(1 << 0)
 #define IIO_IOAPIC_ABAR			0x40
 #define  IIO_IOAPIC_ABAR_EN		(1 << 15)
 /* Stock firmware places the IIO IOAPIC right above the PCH one. */
@@ -171,6 +174,32 @@ static unsigned long grantley_fill_dmar(unsigned long current)
 
 	return current;
 }
+
+/*
+ * The VT-d unit reports no coherent access to its paging structures and
+ * interrupt remapping table until firmware sets ECAP.C, so the OS must
+ * flush every update to them out of the CPU caches. Stock firmware sets
+ * the bit; do the same.
+ */
+static void grantley_vtd_set_coherency(void *unused)
+{
+	const uintptr_t ecap = GRANTLEY_VTD_BASE + VTD_ECAP;
+	u32 value;
+
+	if (!(pci_s_read_config32(PCI_DEV(0, 5, 0), IIO_VTBAR) & IIO_VTBAR_EN))
+		return;
+
+	value = read32p(ecap);
+	if (value == UINT32_MAX) {
+		printk(BIOS_ERR, "Grantley: VT-d ECAP does not decode\n");
+		return;
+	}
+
+	write32p(ecap, value | VTD_ECAP_C);
+	printk(BIOS_DEBUG, "Grantley: VT-d ECAP %08x -> %08x\n", value, read32p(ecap));
+}
+
+BOOT_STATE_INIT_ENTRY(BS_DEV_INIT, BS_ON_EXIT, grantley_vtd_set_coherency, NULL);
 
 static unsigned long grantley_write_acpi_tables(const struct device *dev,
 						unsigned long current,
