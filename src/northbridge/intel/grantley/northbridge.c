@@ -4,6 +4,7 @@
 #include <commonlib/helpers.h>
 #include <console/console.h>
 #include <device/device.h>
+#include <device/mmio.h>
 #include <device/pci.h>
 #include <device/pci_ids.h>
 #include <device/pci_ops.h>
@@ -32,9 +33,11 @@
 /* Stock firmware places the IIO IOAPIC right above the PCH one. */
 #define IIO_IOAPIC_ABAR_STOCK		(IIO_IOAPIC_ABAR_EN | 0x010)
 #define IIO_IOAPIC_GSI_BASE		24
-#define IIO_IOAPIC_PCI_BUS		0
-#define IIO_IOAPIC_PCI_SLOT		5
-#define IIO_IOAPIC_PCI_FUNC		4
+#define IIO_IOAPIC_ID			2
+#define IOAPIC_INDEX			0x00
+#define IOAPIC_DATA			0x10
+#define IOAPIC_ID_REG			0x00
+#define IOAPIC_ID_MASK			(0xf << 24)
 
 /* Top of the low MMIO window, 1 MiB granularity. */
 #define IIO_MMIO_TOP			0xa4
@@ -133,33 +136,33 @@ static uintptr_t iio_ioapic_addr(void)
 	return IO_APIC_ADDR | ((abar & 0xfff) << 8);
 }
 
+static struct device_operations iio_ioapic_ops;
+
 static unsigned long grantley_fill_dmar(unsigned long current)
 {
 	const unsigned long tmp = current;
-	const uintptr_t iio_ioapic = iio_ioapic_addr();
+	struct device *ioapic = NULL;
 
 	current += acpi_create_dmar_drhd_4k(current, DRHD_INCLUDE_PCI_ALL, 0,
 					    GRANTLEY_VTD_BASE);
 	current += acpi_create_dmar_ds_ioapic_from_hw(current, IO_APIC_ADDR,
 						      PCH_IOAPIC_PCI_BUS,
 						      PCH_IOAPIC_PCI_SLOT, 0);
-	if (iio_ioapic) {
-		/*
-		 * Use the ID announced in the MADT. The OS matches the two
-		 * tables by ID, and the IIO IOAPIC window does not reliably
-		 * decode by the time the ACPI tables are written.
-		 */
-		struct device *ioapic = NULL;
-		u8 id = get_ioapic_id(iio_ioapic);
+	while ((ioapic = dev_find_path(ioapic, DEVICE_PATH_IOAPIC))) {
+		const struct device *pci = ioapic->upstream ? ioapic->upstream->dev : NULL;
 
-		while ((ioapic = dev_find_path(ioapic, DEVICE_PATH_IOAPIC))) {
-			if (ioapic->path.ioapic.addr == iio_ioapic)
-				id = ioapic->path.ioapic.ioapic_id;
-		}
-		printk(BIOS_DEBUG, "DMAR: IIO IOAPIC %lx id %u (hw %u)\n",
-		       (unsigned long)iio_ioapic, id, get_ioapic_id(iio_ioapic));
-		current += acpi_create_dmar_ds_ioapic(current, id, IIO_IOAPIC_PCI_BUS,
-						    IIO_IOAPIC_PCI_SLOT, IIO_IOAPIC_PCI_FUNC);
+		if (!pci || !is_pci(pci) || pci->ops != &iio_ioapic_ops)
+			continue;
+		/* This DRHD covers only socket zero's PCI segment and domain. */
+		if (!pci->upstream || pci->upstream->segment_group ||
+		    pci->upstream->dev->path.type != DEVICE_PATH_DOMAIN ||
+		    dev_get_domain_id(pci) != 0)
+			continue;
+		/* Use the ID announced in the MADT; the OS matches the tables by it. */
+		current += acpi_create_dmar_ds_ioapic(current, ioapic->path.ioapic.ioapic_id,
+						      pci->upstream->secondary,
+						      PCI_SLOT(pci->path.pci.devfn),
+						      PCI_FUNC(pci->path.pci.devfn));
 	}
 	for (size_t i = 0; i < 8; i++)
 		current += acpi_create_dmar_ds_msi_hpet(current, 0, PCH_HPET_PCI_BUS,
@@ -215,6 +218,20 @@ static void iio_ioapic_read_resources(struct device *dev)
 	mmio_range(dev, IIO_IOAPIC_ABAR, iio_ioapic_addr(), 0x100);
 }
 
+/* Both IOAPICs reset to ID 0; give this one a unique ID for the MADT and DMAR. */
+static void iio_ioapic_set_id(uintptr_t ioapic_base)
+{
+	u32 reg;
+
+	write32p(ioapic_base + IOAPIC_INDEX, IOAPIC_ID_REG);
+	reg = read32p(ioapic_base + IOAPIC_DATA);
+	write32p(ioapic_base + IOAPIC_DATA, (reg & ~IOAPIC_ID_MASK) | IIO_IOAPIC_ID << 24);
+
+	if (get_ioapic_id(ioapic_base) != IIO_IOAPIC_ID)
+		printk(BIOS_ERR, "IIO: IOAPIC ID %u did not stick, read %u\n",
+		       IIO_IOAPIC_ID, get_ioapic_id(ioapic_base));
+}
+
 static void iio_ioapic_init(struct device *dev)
 {
 	const uintptr_t ioapic_base = iio_ioapic_addr();
@@ -238,6 +255,8 @@ static void iio_ioapic_init(struct device *dev)
 	printk(BIOS_DEBUG, "IIO: low MMIO top %08x -> %08x\n", mmio_top,
 	       pci_s_read_config32(PCI_DEV(0, 5, 0), IIO_MMIO_TOP));
 
+	iio_ioapic_set_id(ioapic_base);
+
 	bus = alloc_bus(dev);
 	assert(bus);
 
@@ -245,8 +264,8 @@ static void iio_ioapic_init(struct device *dev)
 	 * Leave the redirection table alone: the IIO configures this IOAPIC
 	 * itself, and writing the table here stops the whole window from
 	 * decoding, so the clearing performed by ioapic_setup() fails while
-	 * the ID register still reads back. Announce the IOAPIC only, so that
-	 * it ends up in the MADT and the DMAR scope.
+	 * the ID register still reads back. Program only the ID above and
+	 * announce the IOAPIC, so that it ends up in the MADT and DMAR scope.
 	 */
 	path.ioapic.ioapic_id = get_ioapic_id(ioapic_base);
 	path.ioapic.addr = ioapic_base;
