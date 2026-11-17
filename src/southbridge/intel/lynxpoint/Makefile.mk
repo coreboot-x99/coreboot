@@ -35,6 +35,7 @@ bootblock-y += early_pch.c
 romstage-y += early_usb.c me_status.c early_pch.c
 romstage-$(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY) += early_pch_grantley.c thermal.c
 romstage-$(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY) += hsio/common.c hsio/wbg_b0.c
+ramstage-$(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY) += dmi.c
 # On Grantley the early ME code only serves the optional ME UMA handoff.
 ifeq ($(CONFIG_NORTHBRIDGE_INTEL_GRANTLEY),y)
 romstage-$(CONFIG_GRANTLEY_ME_UMA) += early_me.c
@@ -44,10 +45,10 @@ endif
 romstage-y += pmutil.c
 romstage-y += iobp.c
 
-romstage-$(CONFIG_USE_NATIVE_RAMINIT) += early_pch_native.c early_usb_native.c iobp.c thermal.c
+romstage-$(CONFIG_USE_NATIVE_RAMINIT) += early_pch_native.c early_usb_native.c iobp.c thermal.c dmi.c
 subdirs-$(CONFIG_USE_NATIVE_RAMINIT) += hsio
 
-romstage-$(CONFIG_USE_BROADWELL_MRC) += early_pch_native.c early_usb_native.c iobp.c thermal.c
+romstage-$(CONFIG_USE_BROADWELL_MRC) += early_pch_native.c early_usb_native.c iobp.c thermal.c dmi.c
 subdirs-$(CONFIG_USE_BROADWELL_MRC) += hsio
 
 ifeq ($(CONFIG_INTEL_LYNXPOINT_LP),y)
