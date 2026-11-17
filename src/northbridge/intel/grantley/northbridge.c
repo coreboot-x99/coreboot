@@ -164,9 +164,9 @@ static unsigned long grantley_fill_dmar(unsigned long current)
 						      PCI_SLOT(pci->path.pci.devfn),
 						      PCI_FUNC(pci->path.pci.devfn));
 	}
-	for (size_t i = 0; i < 8; i++)
-		current += acpi_create_dmar_ds_msi_hpet(current, 0, PCH_HPET_PCI_BUS,
-							PCH_HPET_PCI_SLOT, i);
+	/* The PCH has one HPET block; all of its timers share one requester ID. */
+	current += acpi_create_dmar_ds_msi_hpet(current, 0, PCH_HPET_PCI_BUS,
+						PCH_HPET_PCI_SLOT, 0);
 	acpi_dmar_drhd_fixup(tmp, current);
 
 	return current;

@@ -62,10 +62,14 @@ static void enable_hpet(struct device *const dev)
 	u32 reg32;
 	size_t i;
 
-	/* Assign unique bus/dev/fn for each HPET */
+	/*
+	 * Assign unique bus/dev/fn for each HPET, except on Grantley: its DMAR
+	 * table describes the HPET block with a single scope that all timers share.
+	 */
 	for (i = 0; i < 8; ++i)
 		pci_write_config16(dev, LPC_HnBDF(i),
-			PCH_HPET_PCI_BUS << 8 | PCH_HPET_PCI_SLOT << 3 | i);
+			PCH_HPET_PCI_BUS << 8 | PCH_HPET_PCI_SLOT << 3 |
+			(CONFIG(NORTHBRIDGE_INTEL_GRANTLEY) ? 0 : i));
 
 	/* Move HPET to default address 0xfed00000 and enable it */
 	reg32 = RCBA32(HPTC);
