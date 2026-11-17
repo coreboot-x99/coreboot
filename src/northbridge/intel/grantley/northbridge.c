@@ -9,6 +9,7 @@
 #include <device/pci.h>
 #include <device/pci_ids.h>
 #include <device/pci_ops.h>
+#include <timer.h>
 #include <cpu/cpu.h>
 #include <cpu/intel/grantley/grantley.h>
 #include <cpu/intel/grantley/grantley_routing.h>
@@ -328,9 +329,58 @@ static const struct pci_driver iio_ioapic_driver __pci_driver = {
 	.devices = iio_ioapic_ids,
 };
 
+#define DMI_LNKCAP	0x9c
+#define DMI_LNKCON	0x1b0
+#define DMI_LNKSTS	0x1b2
+#define DMI_LNKCON2	0x1c0
+
+static void dmi_print_link_status(int loglevel)
+{
+	const u16 lnksts = pci_s_read_config16(PCI_DEV(0, 0, 0), DMI_LNKSTS);
+	printk(loglevel, "DMI: Running at Gen%u x%u\n", lnksts & 0xf, lnksts >> 4 & 0x1f);
+}
+
+static void dmi_retrain(void)
+{
+	const pci_devfn_t dmi = PCI_DEV(0, 0, 0);
+
+	pci_s_write_config16(dmi, DMI_LNKCON,
+			     pci_s_read_config16(dmi, DMI_LNKCON) | PCI_EXP_LNKCTL_RL);
+	if (!wait_ms(100, !(pci_s_read_config16(dmi, DMI_LNKSTS) & PCI_EXP_LNKSTA_LT)))
+		printk(BIOS_ERR, "DMI: Link training timed out\n");
+}
+
+/* The uncore initializer leaves DMI at Gen1; train it to Gen2 as on Haswell. */
+static void grantley_dmi_gen2(void)
+{
+	const pci_devfn_t dmi = PCI_DEV(0, 0, 0);
+
+	pch_dmi_setup_physical_layer();
+	if ((RCBA8(DLCTL2) & 0xf) != 2)
+		return;
+
+	/* Maximum Link Speed is write-once */
+	pci_s_write_config32(dmi, DMI_LNKCAP,
+			     (pci_s_read_config32(dmi, DMI_LNKCAP) & ~PCI_EXP_LNKCAP_MLS) | 2);
+	pci_s_write_config16(dmi, DMI_LNKCON2,
+			     (pci_s_read_config16(dmi, DMI_LNKCON2) & ~0xf) | 2);
+
+	printk(BIOS_DEBUG, "Retraining DMI at Gen2 speeds...\n");
+	dmi_print_link_status(BIOS_DEBUG);
+
+	dmi_retrain();
+	dmi_print_link_status(BIOS_DEBUG);
+
+	/* Retrain link again for DMI Gen2 speeds */
+	dmi_retrain();
+	dmi_print_link_status(BIOS_INFO);
+}
+
 static void grantley_init(void *chip_info)
 {
 	const struct northbridge_intel_grantley_config *cfg = chip_info;
+
+	grantley_dmi_gen2();
 
 	/* The uncore initializer leaves VT-d off; IIO late init would enable it. */
 	if (cfg->vtd_support)
