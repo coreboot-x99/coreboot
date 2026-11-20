@@ -7,11 +7,28 @@
 #define BROADWELL_EP_FAMILY	0x406f0
 #define BROADWELL_DE_FAMILY	0x50660
 
+#define CPUID_HSX_EP_A0		0x306f0
+#define CPUID_HSX_EP_B0		0x306f1
+#define CPUID_HSX_EP_C0		0x306f2 /* C0, C1, M1 (c.f. CAPID4) */
+#define CPUID_BDX_EP_A0		0x406f0 /* A0, A1 (c.f. CAPID1) */
+#define CPUID_BDX_EP_B0		0x406f1
+#define CPUID_BDX_DE_T0		0x50660
+#define CPUID_BDX_DE_U0		0x50661
+#define CPUID_BDX_DE_V0		0x50662 /* V0, V1 (c.f. CAPID1) */
+
+/* TODO: Should probably be a Kconfig, absolute max is 8 */
+#define MAX_CPU_SOCKETS		4
+
 /* Shared by stackless assembly and the Uncore runner. */
 #define GRANTLEY_ECAM_BASE		0x80000000
 #define GRANTLEY_ECAM_LIMIT		0x8c000000
 /* The limit register stores bits 31:26 of the inclusive decoded end. */
 #define GRANTLEY_ECAM_END		((GRANTLEY_ECAM_LIMIT | 0x3ffffffULL) + 1)
+
+#define DEFAULT_COLDBOOT_MMCFG_RULE		GRANTLEY_ECAM_BASE
+#define DEFAULT_COLDBOOT_MMCFG_TARGET_LIST	0x006d2240
+#define DEFAULT_COLDBOOT_IIO_BUS_NUMS		0xc0804000
+#define DEFAULT_COLDBOOT_UNCORE_BUS_NUMS	0xffbf7f3f
 
 #define MSR_XAPIC_BASE			0x1b
 #define LOCAL_APIC_BASE			0xfee00000
@@ -32,6 +49,9 @@
 
 #define GRANTLEY_CF8(bus, dev, fn, reg) \
 	((1 << 31) | ((bus) << 16) | ((dev) << 11) | ((fn) << 8) | (reg))
+
+#define CSR_MMCFG_IIO_BASE_LIMIT_GAP_A0			4
+#define CSR_MMCFG_IIO_BASE_LIMIT_GAP			8
 
 #define CSR_LEGACY_MMIO_RULE3_CBO			GRANTLEY_CF8(1, 15, 5, 0x58)
 #define CSR_LEGACY_MMIO_RULE7_CBO			GRANTLEY_CF8(1, 15, 5, 0x78)
@@ -66,9 +86,23 @@
 	(((0) << 20) | ((dev) << 15) | ((fn) << 12) | (reg))
 
 #define CSR_EMULATION_FLAG_UBOX				GRANTLEY_MMCFG(1, 16, 5, 0xb0)
+#define CSR_CPUNODEID_UBOX				GRANTLEY_MMCFG(1, 16, 5, 0x40)
+#define CSR_CPU_BUS_NUMBER_PCU2				GRANTLEY_MMCFG(1, 30, 2, 0x40)
+#define CSR_SYSTEMSEMAPHORE0				GRANTLEY_MMCFG(1, 16, 7, 0xa8)
+#define CSR_GLOBAL_PKG_C_S_CONTROL_PCU			GRANTLEY_MMCFG(1, 30, 2, 0x6c)
 
+#define CSR_CPUBUSNO_IIO				GRANTLEY_MMCFG(0,  5, 0, 0x108)
+#define CSR_MMCFG_IIO					GRANTLEY_MMCFG(0,  5, 0, 0x90)
+#define CSR_MMCFG_IIO_A0				GRANTLEY_MMCFG(0,  5, 0, 0x84)
+
+#define CSR_SAD_TARGET_CBO				GRANTLEY_MMCFG(1, 15, 5, 0xf0)
+
+#define CSR_BIOS_STICKY_SCRATCHPAD(n)			GRANTLEY_MMCFG(1, 16, 7, 0x40 + (n) * 4)
 #define CSR_BIOS_NONSTICKY_SCRATCHPAD(n)		GRANTLEY_MMCFG(1, 16, 7, 0x60 + (n) * 4)
 
+#define CSR_BIOS_MAILBOX_INTERFACE_PCU			GRANTLEY_MMCFG(1, 30, 1, 0x90)
+
+#define CSR_CAPID1_HSX_BDX				GRANTLEY_MMCFG(1, 30, 3, 0x88)
 #define CSR_CAPID4_HSX_BDX				GRANTLEY_MMCFG(1, 30, 3, 0x94)
 
 #define CSR_VCU_MAILBOX_INTERFACE			GRANTLEY_MMCFG(1, 31, 0, 0x40)

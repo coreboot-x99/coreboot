@@ -76,6 +76,7 @@
 	inl	%dx, %eax
 	andl	$0x38, %eax		/* keep bits 5:3 */
 	shrl	$3, %eax		/* node id */
+	movd	%eax, %xmm1
 	movl	%eax, %ebx
 	movb	$3, %cl
 	movb	$7, %ch
@@ -98,6 +99,15 @@
 	movw	$0xcfc, %dx
 	movl	%ebx, %eax
 	outl	%eax, %dx
+
+	/* Store CPU family/stepping in xmm1[27:8] */
+	movl	$1, %eax
+	cpuid
+	andl	$0xfffff, %eax
+	shll	$8, %eax
+	movd	%xmm1, %ebx
+	orl	%eax, %ebx
+	movd	%ebx, %xmm1
 
 	/* Decode 0xfc000000..0xffffffff, including CAR, as MMIO
 	 * (1:15.5:0x58/0x5c = MMIO_RULE_3 base/limit). */

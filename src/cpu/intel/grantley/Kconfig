@@ -15,6 +15,7 @@ config CPU_INTEL_GRANTLEY
 	# Port I/O requires SAD routing, installed by the CPU CAR entry.
 	select NO_EARLY_BOOTBLOCK_POSTCODES
 	select CPU_INTEL_FIRMWARE_INTERFACE_TABLE
+	select SIPI_VECTOR_IN_ROM # We have a lot of early ASM
 
 if CPU_INTEL_GRANTLEY
 
