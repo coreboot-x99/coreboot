@@ -31,10 +31,10 @@ config SMM_RESERVED_SIZE
 	hex
 	default 0x100000
 
+# Xeon E5-2699 v4 has 22 cores and 44 threads
 config MAX_CPUS
-	int
-	default 44
-	help
-	  Supports up to 22-core / 44-thread Xeon E5 v3 and v4 processors.
+	default 44  if MAX_SOCKET <= 1
+	default 88  if MAX_SOCKET <= 2
+	default 176 if MAX_SOCKET <= 4
 
 endif

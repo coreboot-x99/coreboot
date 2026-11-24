@@ -12,6 +12,12 @@
 #include <drivers/intel/oc_mailbox/oc_mailbox.h>
 #include "grantley.h"
 
+unsigned int smbios_soc_get_max_sockets(void)
+{
+	/* TODO: hardcoded, is this okay? */
+	return CONFIG_MAX_SOCKET;
+}
+
 /* MSR_CORE_THREAD_COUNT is package scoped on Xeon E5 v3/v4. */
 #define MSR_CORE_THREAD_COUNT 0x35
 
